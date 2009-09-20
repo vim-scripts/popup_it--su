@@ -1,0 +1,16 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=2791
+
+use regexp to match line pattern
+then auto popup complete menu.
+default support c c.gtk tex html css javascript 
+
+"             let g:usrPopup= {}
+"             let s:usrPopup["type"] = [
+"                         \ {'cmd'     : "\<c-n>",
+"                         \  'pattern' : ['xx', 'yy'],
+"                         \  'exclude' : ['zz'],
+"                         \ },
+"                         \{item2}
+"                         \{item3}
+"                         \]
+
