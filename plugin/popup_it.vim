@@ -1,13 +1,13 @@
 "    Author:  Fvw (vimtexhappy@gmail.com)
 "             Auto complete popup plugin
-"   Version:  v01.04
-"   Created:  2008-04-10
+"   Version:  v01.06
+"   Created:  2009-09-26
 "   License:  Copyright (c) 2001-2009, Fvw
 "             GNU General Public License version 2 for more details.
 "     Usage:  Put this file in your VIM plugins dir
 "             Add usr type:
-"             let g:usr_popup= {}
-"             let g:usr_popup["type"] = [
+"             let g:usr_pp= {}
+"             let g:usr_pp["type"] = [
 "                         \ {'cmd'     : "\<c-n>",
 "                         \  'pattern' : ['xx', 'yy'],
 "                         \  'exclude' : ['zz'],
@@ -15,16 +15,14 @@
 "                         \{item2}
 "                         \{item3}
 "                         \]
-"             if already exists deftype, the item than usrtype didn't
-"             have would be append.
 "             "*" type would be append to every type.
 "
 "             Use :PopupType type change now popupType
-"popup_it.vim: {{{1
-if v:version < 700 || exists("loaded_popup_it")
+"pp_it.vim: {{{1
+if v:version < 700 || exists("loaded_pp_it")
     finish
 endif
-let loaded_popup_it= 1
+let loaded_pp_it= 1
 
 let s:keys    = [
             \ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
@@ -36,31 +34,49 @@ let s:keys    = [
             \ '.', ',', ':', '!', '#', '=', '%', '$', '@', '<', '>',
             \ '/', '\']
 
-autocmd BufEnter,BufRead * call <SID>popup_run()
-autocmd FileType * call <SID>popup_run()
-amenu <silent> &Popup.Run :call <SID>popup_run()<CR>
-amenu <silent> &Popup.Clr :call <SID>popup_clr()<CR>
+autocmd BufEnter,BufRead * call <SID>pp_run()
+autocmd FileType * call <SID>pp_run()
+amenu <silent> &Popup.Run :call <SID>pp_run()<CR>
+amenu <silent> &Popup.Clr :call <SID>pp_clr()<CR>
 
-command PopupRun call <SID>popup_run()
-command PopupClr call <SID>popup_clr()
+command PopupRun call <SID>pp_run()
+command PopupClr call <SID>pp_clr()
 
-command -nargs=? -complete=customlist,g:popup_types PopupType call <SID>SetPopupType(<q-args>)
+command -nargs=? -complete=customlist,g:pp_types PopupType call <SID>set_pp_type(<q-args>)
 
-"get_sid {{{1
-fun! s:get_sid()
-    return matchstr(expand('<sfile>'), '<SNR>\d\+_')
-endfun
+"Map {{{1
+function! s:map_key()
+    silent! inoremap <silent> <buffer> <expr> <c-x><c-o>
+                \ (pumvisible()?'<c-y>':'').
+                \ '<c-x><c-o><c-r>=<SID>pp_fix("OmniTips")<cr>'
+    silent! inoremap <silent> <buffer> <expr> <c-n>
+                \ (pumvisible()?'<c-n>':
+                \ '<c-n><c-r>=<SID>pp_fix("CtrlNTips")<cr>')
+    silent! inoremap <silent> <buffer> <expr> <c-b>
+                \ (pumvisible()?'<c-y>':'').
+                \ '<c-n><c-r>=<SID>pp_fix("CtrlNTips")<cr>'
 
-"popup_clr {{{1
-fun! s:popup_clr()
-    let s:all_popups  = {}
-    let b:pp_now_popup  = []
-    let b:pum_tips = ''
-    let b:pp_last_fail  = {}
-    "idx == 0  -> no fail
-    call s:update_last_fail(0)
+    "use \<c-r> insert fix char
+    inoremap <silent> <buffer> <Plug>PopupFix <c-r>=<SID>pp_fix()<cr>
+
     for key in s:keys
-        if maparg(key, 'i') =~ 'popup_chk'
+        if maparg(key, 'i') == ""
+            exec "silent! inoremap <silent> <buffer> ".key." ".key.
+                        \ "\<c-r>=\<SID>pp_chk()\<cr>"
+        endif
+    endfor
+    nnoremap <silent> <buffer> i i<c-r>=<SID>pp_chk()<cr>
+    nnoremap <silent> <buffer> a a<c-r>=<SID>pp_chk()<cr>
+    if has("autocmd") && exists("+omnifunc")
+        if &omnifunc == ""
+            setlocal omnifunc=syntaxcomplete#Complete
+        endif
+    endif
+endfunction
+
+function! s:unmap_key()
+    for key in s:keys
+        if maparg(key, 'i') =~ 'pp_chk'
             exec "silent! iunmap <buffer> ".key
         endif
     endfor
@@ -68,59 +84,51 @@ fun! s:popup_clr()
     silent! iunmap <buffer> <c-n>
     silent! iunmap <buffer> <c-p>
     silent! iunmap <buffer> <c-b>
-    silent! iunmap <buffer> <Plug>popup_fix
+    silent! iunmap <buffer> <Plug>pp_fix
     silent! nunmap <buffer> i
     silent! nunmap <buffer> a
+endfunction
+
+"get_sid {{{1
+fun! s:get_sid()
+    return matchstr(expand('<sfile>'), '<SNR>\d\+_')
+endfun
+
+"pp_clr {{{1
+fun! s:pp_clr()
+    call s:unmap_key()
     exec "silent! aunmenu &Popup.Type"
 endfun
 
-"popup_run {{{1
-fun! s:popup_run()
-    call s:popup_clr()
-    call s:make_popups()
-    cal  s:set_popup_type(&ft)
-
-    if has("autocmd") && exists("+omnifunc")
-        if &omnifunc == ""
-            setlocal omnifunc=syntaxcomplete#Complete
-        endif
-    endif
-    silent! inoremap <silent> <buffer> <expr> <c-x><c-o>
-                \ (pumvisible()?'<c-y>':'').
-                \ '<c-x><c-o><c-r>=<SID>popup_fix("OmniTips")<cr>'
-    silent! inoremap <silent> <buffer> <expr> <c-n>
-                \ (pumvisible()?'<c-n>':
-                \ '<c-n><c-r>=<SID>popup_fix("CtrlNTips")<cr>')
-    silent! inoremap <silent> <buffer> <expr> <c-b>
-                \ (pumvisible()?'<c-y>':'').
-                \ '<c-n><c-r>=<SID>popup_fix("CtrlNTips")<cr>'
-
-    "use \<c-r> insert fix char
-    inoremap <silent> <buffer> <Plug>PopupFix <c-r>=<SID>popup_fix()<cr>
-
-    for key in s:keys
-        if maparg(key, 'i') == ""
-            exec "silent! inoremap <silent> <buffer> ".key." ".key.
-                        \ "\<c-r>=\<SID>popup_chk()\<cr>"
-        endif
-    endfor
-    nnoremap <silent> <buffer> i i<c-r>=<SID>popup_chk()<cr>
-    nnoremap <silent> <buffer> a a<c-r>=<SID>popup_chk()<cr>
+"pp_run {{{1
+fun! s:pp_run()
+    "--------------------------------------------------
+    let s:all_pps  = {}
+    let b:pp_new  = []
+    let b:pp_last_fail  = {}
+    "--------------------------------------------------
+    "idx == 0  -> no fail
+    call g:set_pp_tips("")
+    call s:update_last_fail(0)
+    call s:make_pps()
+    call s:set_pp_type(&ft)
+    call s:map_key()
+    call g:pp_reset()
 endfun
 
-"popup_fix {{{1
-fun! s:popup_fix(...)
+"pp_fix {{{1
+fun! s:pp_fix(...)
     "Don't use feedkeys , because if the complete
     "very slow the feedkeys would add key after
     "some use input
     if !pumvisible()
-        let b:pum_tips = ""
+        call g:set_pp_tips("")
         return "\<c-e>"
     else
         "clean
         call s:update_last_fail(0)
         if a:0 == 1
-            let b:pum_tips = a:1
+            call g:set_pp_tips(a:1)
         endif
         "return "\<c-p>\<down>"
         return "\<c-p>"
@@ -128,29 +136,37 @@ fun! s:popup_fix(...)
 endfun
 
 
-"popup_chk {{{1
-fun! s:popup_chk()
+"pp_chk {{{1
+fun! s:pp_chk()
+    "--------------------------------------------------
     "ignore
-    if &paste
+    if &paste || s:pp_is_pause()
         return ""
     end
     "skip some pumvisible tips
     "SnipTips" "SelTips" for snip plugin tab_it.vim
-    if pumvisible() && (b:pum_tips == "SnipTips"
-                \ ||b:pum_tips == "SelTips"
-                \ ||b:pum_tips == "CtrlNTips"
-                \ ||b:pum_tips == "CtrlPTips"
-                \ ||b:pum_tips == "OmniTips"
+    if pumvisible()
+                \&& (g:get_pp_tips() == "SnipTips"
+                \  ||g:get_pp_tips() == "SelTips"
+                \  ||g:get_pp_tips() == "CtrlNTips"
+                \  ||g:get_pp_tips() == "CtrlPTips"
+                \  ||g:get_pp_tips() == "OmniTips"
                 \)
         return ""
     endif
-
-    let lstr = getline('.')[:col('.')-2]
+    "--------------------------------------------------
+    let idx = col('.')-2
+    if idx >= 0
+        let lstr = getline('.')[:idx]
+    else
+        let lstr = ''
+    endif
     let i = 0
-    for cpl in b:pp_now_popup
+    for cpl in b:pp_new
         let i += 1
-        if s:is_match(lstr, cpl.pattern)  && (!has_key(cpl,'exclude') || !s:is_match(lstr, cpl.exclude))
-            if (pumvisible() && b:pum_tips == "AutoTips".i)
+        if s:is_match(lstr, cpl.pattern)
+                    \ && !(has_key(cpl,'exclude') && s:is_match(lstr, cpl.exclude))
+            if (pumvisible() && g:get_pp_tips() == "AutoTips".i)
                 "This match already pumvisible
                 return ""
             endif
@@ -168,8 +184,8 @@ fun! s:popup_chk()
                 "<C-R>= can't remap use feedkeys can remap
                 call feedkeys(cpl.cmd, 'm')
             end
-            let b:pum_tips = "AutoTips".i
-            "Set first , Clear in popup_fix if pum ok"
+            call g:set_pp_tips("AutoTips".i)
+            "Set first , Clear in pp_fix if pum ok"
             call s:update_last_fail(i)
             "Use plug for silent
             call feedkeys("\<Plug>PopupFix", 'm')
@@ -198,6 +214,27 @@ fun! s:is_last_fail(idx)
     return 0
 endfun
 
+"Tips {{{1
+function! g:set_pp_tips(w)
+    let b:pp_tips = a:w
+endfun
+function! g:get_pp_tips()
+    return b:pp_tips
+endfun
+"pp pause{{{1
+function! g:pp_pause()
+    let b:pp_pasue = 1
+endfun
+function! g:pp_continue()
+    let b:pp_pasue = 0
+endfun
+function! g:pp_reset()
+    let b:pp_pasue = 0
+endfun
+function! s:pp_is_pause()
+    return b:pp_pasue
+endfun
+
 "ExtendType: {{{1
 fun! s:extend_type(list1, list2)
     for item in a:list2
@@ -216,46 +253,46 @@ fun! s:has_cmd(list, chk)
 endfun
 
 "MakeAllPopup: {{{1
-fun! s:make_popups()
-    let s:all_popups = {}
-    if exists("g:usr_popup") && type(g:usr_popup) ==  type({})
-        let s:all_popups = deepcopy(g:usr_popup)
-        for type in keys(s:def_popup)
-            if !has_key(s:all_popups, type)
-                let s:all_popups[type] = deepcopy(s:def_popup[type])
+fun! s:make_pps()
+    let s:all_pps = {}
+    if exists("g:usr_pp") && type(g:usr_pp) ==  type({})
+        let s:all_pps = deepcopy(g:usr_pp)
+        for type in keys(s:def_pp)
+            if !has_key(s:all_pps, type)
+                let s:all_pps[type] = deepcopy(s:def_pp[type])
             else
-                call s:extend_type(s:all_popups[type], s:def_popup[type])
+                call s:extend_type(s:all_pps[type], s:def_pp[type])
             endif
         endfor
     else
-        let s:all_popups = deepcopy(s:def_popup)
+        let s:all_pps = deepcopy(s:def_pp)
     endif
 
     exec "silent! aunmenu &Popup.Type"
-    for type in keys(s:all_popups)
+    for type in keys(s:all_pps)
         silent exec 'amenu <silent> &Popup.Type.'.escape(type, '.').
-                    \ " :call \<SID>SetPopupType('".type."')\<CR>"
+                    \ " :call \<SID>set_pp_type('".type."')\<CR>"
     endfor
 endfun
 
-"set_popup_type{{{1
-fun! s:set_popup_type(...)
+"set_pp_type{{{1
+fun! s:set_pp_type(...)
     let type = a:0 > 0 ? a:1 : &ft
-    let b:pp_now_popup = []
-    if has_key(s:all_popups, type)
-        let b:pp_now_popup = deepcopy(s:all_popups[type])
+    let b:pp_new = []
+    if has_key(s:all_pps, type)
+        let b:pp_new = deepcopy(s:all_pps[type])
     endif
-    if type != '*' && has_key(s:all_popups, "*")
-        call s:extend_type(b:pp_now_popup, s:all_popups['*'])
+    if type != '*' && has_key(s:all_pps, "*")
+        call s:extend_type(b:pp_new, s:all_pps['*'])
     endif
 endfun
-fun! g:popup_types(A,L,P)
-    return keys(s:all_popups)
+fun! g:pp_types(A,L,P)
+    return keys(s:all_pps)
 endfun
 
 "def Popup: {{{1
-let s:def_popup = {}
-let s:def_popup["*"] = [
+let s:def_pp = {}
+let s:def_pp["*"] = [
             \ {'cmd'     : "\<c-x>\<c-f>",
             \  'pattern' : ['/\f\{1,}'],
             \ },
@@ -263,12 +300,12 @@ let s:def_popup["*"] = [
             \  'pattern' : ['\k\@<!\k\{3,20}'],
             \ },
             \]
-let s:def_popup["c"] = [
+let s:def_pp["c"] = [
             \ {'cmd'     : "\<c-x>\<c-o>",
             \  'pattern' : ['\k\.','\k->'],
             \ },
             \]
-let s:def_popup["c.gtk"] = [
+let s:def_pp["c.gtk"] = [
             \ {'cmd'     : "\<c-x>\<c-o>",
             \  'pattern' : ['\k\.\k{0,20}','\k->\k{0,20}',
             \               'gtk_\k\{2,20}','GTK_\k\{1,20}','Gtk\k\{1,20}',
@@ -276,18 +313,18 @@ let s:def_popup["c.gtk"] = [
             \               'g_\k\{2,20}', 'G_\k\{1,20}'],
             \ },
             \]
-let s:def_popup["tex"] = [
+let s:def_pp["tex"] = [
             \ {'cmd'     : "\<c-n>",
             \  'pattern' : ['\\\k\{3,20}','\([\|{\)\k\{3,20}'],
             \ },
             \]
-let s:def_popup["html"] = [
+let s:def_pp["html"] = [
             \ {'cmd'     : "\<c-x>\<c-o>",
             \  'pattern' : ['&','<','</',
             \               '<.*\s\+\k\{3,20}','<.*\k\+\s*="\k\{3,20}'],
             \ },
             \]
-let s:def_popup["css"] = [
+let s:def_pp["css"] = [
             \ {'cmd'     : "\<c-n>",
             \  'pattern' : ['\k\@<!\k\{3,20}'],
             \  'exclude' : ['^\s.*'],
@@ -296,7 +333,7 @@ let s:def_popup["css"] = [
             \  'pattern' : ['^\s.*\(\k\|-\)\@<!\(\k\|-\)\{2,20}'],
             \ },
             \]
-let s:def_popup["javascript"] = [
+let s:def_pp["javascript"] = [
             \ {'cmd'     : "\<c-x>\<c-o>",
             \  'pattern' : ['\k\.\k\{0,20}'],
             \ },
