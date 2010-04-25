@@ -1,13 +1,13 @@
 "    Author:  Fvw (vimtexhappy@gmail.com)
 "             Auto complete popup plugin
-"   Version:  v01.06
-"   Created:  2009-09-26
-"   License:  Copyright (c) 2001-2009, Fvw
+"   Version:  v01.07
+"   Created:  2010-04-25
+"   License:  Copyright (c) 2001-2010, Fvw
 "             GNU General Public License version 2 for more details.
 "     Usage:  Put this file in your VIM plugins dir
 "             Add usr type:
-"             let g:usr_pp= {}
-"             let g:usr_pp["type"] = [
+"             let g:usrPP= {}
+"             let g:usrPP["type"] = [
 "                         \ {'cmd'     : "\<c-n>",
 "                         \  'pattern' : ['xx', 'yy'],
 "                         \  'exclude' : ['zz'],
@@ -19,54 +19,62 @@
 "
 "             Use :PopupType type change now popupType
 "pp_it.vim: {{{1
-if v:version < 700 || exists("loaded_pp_it")
+if v:version < 700 || exists("g:loadedPPIT")
     finish
 endif
-let loaded_pp_it= 1
+let g:loadedPPIT= 1
 
-let s:keys    = [
-            \ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
-            \ 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-            \ 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
-            \ 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-            \ 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2',
-            \ '3', '4', '5', '6', '7', '8', '9', '-', '_', '~', '^',
-            \ '.', ',', ':', '!', '#', '=', '%', '$', '@', '<', '>',
-            \ '/', '\']
 
-autocmd BufEnter,BufRead * call <SID>pp_run()
-autocmd FileType * call <SID>pp_run()
-amenu <silent> &Popup.Run :call <SID>pp_run()<CR>
-amenu <silent> &Popup.Clr :call <SID>pp_clr()<CR>
+"let s:keys    = [
+            "\ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
+            "\ 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+            "\ 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+            "\ 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
+            "\ 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2',
+            "\ '3', '4', '5', '6', '7', '8', '9', '-', '_', '~', '^',
+            "\ '.', ',', ':', '!', '#', '=', '%', '$', '@', '<', '>',
+            "\ '/', '\']
 
-command PopupRun call <SID>pp_run()
-command PopupClr call <SID>pp_clr()
 
-command -nargs=? -complete=customlist,g:pp_types PopupType call <SID>set_pp_type(<q-args>)
+autocmd BufEnter,BufRead * call <SID>RunPP()
+autocmd FileType * call <SID>RunPP()
+amenu <silent> &Popup.Run :call <SID>RunPP()<CR>
+amenu <silent> &Popup.Clr :call <SID>StopPP()<CR>
+
+command PopupRun call <SID>RunPP()
+command PopupClr call <SID>StopPP()
+
+command -nargs=? -complete=custom,g:PPTypes PopupType call <SID>SetPPTypes(<q-args>)
 
 "Map {{{1
-function! s:map_key()
+function! s:Map()
     silent! inoremap <silent> <buffer> <expr> <c-x><c-o>
                 \ (pumvisible()?'<c-y>':'').
-                \ '<c-x><c-o><c-r>=<SID>pp_fix("OmniTips")<cr>'
+                \ '<c-x><c-o><c-r>=<SID>FixPP("OmniTip")<cr>'
     silent! inoremap <silent> <buffer> <expr> <c-n>
                 \ (pumvisible()?'<c-n>':
-                \ '<c-n><c-r>=<SID>pp_fix("CtrlNTips")<cr>')
+                \ '<c-n><c-r>=<SID>FixPP("CtrlNTip")<cr>')
     silent! inoremap <silent> <buffer> <expr> <c-b>
                 \ (pumvisible()?'<c-y>':'').
-                \ '<c-n><c-r>=<SID>pp_fix("CtrlNTips")<cr>'
+                \ '<c-n><c-r>=<SID>FixPP("CtrlNTip")<cr>'
 
     "use \<c-r> insert fix char
-    inoremap <silent> <buffer> <Plug>PopupFix <c-r>=<SID>pp_fix()<cr>
+    inoremap <silent> <buffer> <Plug>PopupFix <c-r>=<SID>FixPP()<cr>
 
-    for key in s:keys
-        if maparg(key, 'i') == ""
-            exec "silent! inoremap <silent> <buffer> ".key." ".key.
-                        \ "\<c-r>=\<SID>pp_chk()\<cr>"
-        endif
-    endfor
-    nnoremap <silent> <buffer> i i<c-r>=<SID>pp_chk()<cr>
-    nnoremap <silent> <buffer> a a<c-r>=<SID>pp_chk()<cr>
+    "for key in s:keys
+        "if maparg(key, 'i') == ""
+            "exec "silent! inoremap <silent> <buffer> ".key." ".key.
+                        "\ "\<c-r>=\<SID>CheckPP()\<cr>"
+        "endif
+    "endfor
+    au! CursorHoldI * :call <SID>CheckPP()
+
+    if maparg('i', 'n') == ""
+        nnoremap <silent> <buffer> i i<c-r>=<SID>CheckPP()<cr>
+    endif
+    if maparg('a', 'n') == ""
+        nnoremap <silent> <buffer> a a<c-r>=<SID>CheckPP()<cr>
+    endif
     if has("autocmd") && exists("+omnifunc")
         if &omnifunc == ""
             setlocal omnifunc=syntaxcomplete#Complete
@@ -74,61 +82,62 @@ function! s:map_key()
     endif
 endfunction
 
-function! s:unmap_key()
-    for key in s:keys
-        if maparg(key, 'i') =~ 'pp_chk'
-            exec "silent! iunmap <buffer> ".key
-        endif
-    endfor
+function! s:Unmap()
+    "for key in s:keys
+        "if maparg(key, 'i') =~ 'CheckPP'
+            "exec "silent! iunmap <buffer> ".key
+        "endif
+    "endfor
     silent! iunmap <buffer> <c-x><c-o>
     silent! iunmap <buffer> <c-n>
     silent! iunmap <buffer> <c-p>
     silent! iunmap <buffer> <c-b>
-    silent! iunmap <buffer> <Plug>pp_fix
+    silent! iunmap <buffer> <Plug>FixPP
     silent! nunmap <buffer> i
     silent! nunmap <buffer> a
+    au! CursorHoldI *
 endfunction
 
-"get_sid {{{1
-fun! s:get_sid()
+"GetSid {{{1
+fun! s:GetSid()
     return matchstr(expand('<sfile>'), '<SNR>\d\+_')
 endfun
 
-"pp_clr {{{1
-fun! s:pp_clr()
-    call s:unmap_key()
+"StopPP {{{1
+fun! s:StopPP()
+    call s:Unmap()
     exec "silent! aunmenu &Popup.Type"
 endfun
 
-"pp_run {{{1
-fun! s:pp_run()
+"RunPP {{{1
+fun! s:RunPP()
+    let b:PPType  = []
+    let b:PPLastFail  = {}
     "--------------------------------------------------
-    let s:all_pps  = {}
-    let b:pp_new  = []
-    let b:pp_last_fail  = {}
-    "--------------------------------------------------
+    if exists("g:PopupDelayTime")
+        exec "set updatetime=".g:PopupDelayTime
+    endif
     "idx == 0  -> no fail
-    call g:set_pp_tips("")
-    call s:update_last_fail(0)
-    call s:make_pps()
-    call s:set_pp_type(&ft)
-    call s:map_key()
-    call g:pp_reset()
+    call g:SetPPTip("")
+    call s:UpdateLastFail(0)
+    call s:SetPPTypes(&ft)
+    call s:Map()
+    call g:ResetPP()
 endfun
 
-"pp_fix {{{1
-fun! s:pp_fix(...)
+"FixPP {{{1
+fun! s:FixPP(...)
     "Don't use feedkeys , because if the complete
     "very slow the feedkeys would add key after
     "some use input
     if !pumvisible()
-        call g:set_pp_tips("")
+        call g:SetPPTip("")
         return "\<c-e>"
     else
         "clean
-        call s:update_last_fail(0)
+        call s:UpdateLastFail(0)
         if a:0 == 1
-            call g:set_pp_tips(a:1)
+            call g:SetPPTip(a:1)
         endif
         "return "\<c-p>\<down>"
         return "\<c-p>"
@@ -136,21 +145,22 @@ fun! s:pp_fix(...)
 endfun
 
 
-"pp_chk {{{1
-fun! s:pp_chk()
+"CheckPP {{{1
+fun! s:CheckPP()
     "--------------------------------------------------
     "ignore
-    if &paste || s:pp_is_pause()
+    if &paste || s:isPPPause()
         return ""
     end
-    "skip some pumvisible tips
+    let tip = g:GetPPTip()
+    "skip some pumvisible tip
     "SnipTips" "SelTips" for snip plugin tab_it.vim
     if pumvisible()
-                \&& (g:get_pp_tips() == "SnipTips"
-                \  ||g:get_pp_tips() == "SelTips"
-                \  ||g:get_pp_tips() == "CtrlNTips"
-                \  ||g:get_pp_tips() == "CtrlPTips"
-                \  ||g:get_pp_tips() == "OmniTips"
+                \&& (tip == "SnipTips"
+                \  ||tip == "SelTips"
+                \  ||tip == "CtrlNTip"
+                \  ||tip == "CtrlPTip"
+                \  ||tip == "OmniTip"
                 \)
         return ""
     endif
@@ -162,17 +172,17 @@ fun! s:pp_chk()
         let lstr = ''
     endif
     let i = 0
-    for cpl in b:pp_new
+    for cpl in b:PPType
         let i += 1
-        if s:is_match(lstr, cpl.pattern)
-                    \ && !(has_key(cpl,'exclude') && s:is_match(lstr, cpl.exclude))
-            if (pumvisible() && g:get_pp_tips() == "AutoTips".i)
+        if s:IsMatch(lstr, cpl.pattern)
+                    \ && !(has_key(cpl,'exclude') && s:IsMatch(lstr, cpl.exclude))
+            if (pumvisible() && tip == "AutoTip".i)
                 "This match already pumvisible
                 return ""
             endif
-            if s:is_last_fail(i)
+            if s:IsLastFail(i)
                 "Update
-                call s:update_last_fail(i)
+                call s:UpdateLastFail(i)
                 return ""
             endif
             if pumvisible()
@@ -184,9 +194,9 @@ fun! s:pp_chk()
                 "<C-R>= can't remap use feedkeys can remap
                 call feedkeys(cpl.cmd, 'm')
             end
-            call g:set_pp_tips("AutoTips".i)
-            "Set first , Clear in pp_fix if pum ok"
-            call s:update_last_fail(i)
+            call g:SetPPTip("AutoTip".i)
+            "Set first , Clear in FixPP if pum ok"
+            call s:UpdateLastFail(i)
             "Use plug for silent
             call feedkeys("\<Plug>PopupFix", 'm')
             return ""
@@ -194,7 +204,7 @@ fun! s:pp_chk()
     endfor
     return ""
 endfun
-fun! s:is_match(str, list)
+fun! s:IsMatch(str, list)
     for val in a:list
         if val != "" && a:str =~ '\m\C'.val.'$'
             return 1
@@ -202,48 +212,48 @@ fun! s:is_match(str, list)
     endfor
     return 0
 endfun
-fun! s:update_last_fail(idx)
-    let b:pp_last_fail['col'] = col('.')
-    let b:pp_last_fail['idx'] = a:idx
+fun! s:UpdateLastFail(idx)
+    let b:PPLastFail['col'] = col('.')
+    let b:PPLastFail['idx'] = a:idx
 endfun
-fun! s:is_last_fail(idx)
-    if col('.') - b:pp_last_fail['col'] == 1
-                \ && b:pp_last_fail['idx'] == a:idx
+fun! s:IsLastFail(idx)
+    if col('.') - b:PPLastFail['col'] == 1
+                \ && b:PPLastFail['idx'] == a:idx
         return 1
     endif
     return 0
 endfun
 
-"Tips {{{1
-function! g:set_pp_tips(w)
-    let b:pp_tips = a:w
+"Tip {{{1
+function! g:SetPPTip(w)
+    let b:PPTip = a:w
 endfun
-function! g:get_pp_tips()
-    return b:pp_tips
+function! g:GetPPTip()
+    return b:PPTip
 endfun
 "pp pause{{{1
-function! g:pp_pause()
-    let b:pp_pasue = 1
+function! g:PausePP()
+    let b:ppPasue += 1
 endfun
-function! g:pp_continue()
-    let b:pp_pasue = 0
+function! g:ContinuePP()
+    let b:ppPasue -= 1
 endfun
-function! g:pp_reset()
-    let b:pp_pasue = 0
+function! g:ResetPP()
+    let b:ppPasue = 0
 endfun
-function! s:pp_is_pause()
-    return b:pp_pasue
+function! s:isPPPause()
+    return (b:ppPasue > 0)
 endfun
 
 "ExtendType: {{{1
-fun! s:extend_type(list1, list2)
+fun! s:ExpendType(list1, list2)
     for item in a:list2
-        if !s:has_cmd(a:list1, item)
+        if !s:HasCmd(a:list1, item)
             call add(a:list1, deepcopy(item))
         endif
     endfor
 endfun
-fun! s:has_cmd(list, chk)
+fun! s:HasCmd(list, chk)
     for item in a:list
         if item.cmd == a:chk.cmd
             return 1
@@ -253,46 +263,46 @@ fun! s:has_cmd(list, chk)
 endfun
 
 "MakeAllPopup: {{{1
-fun! s:make_pps()
-    let s:all_pps = {}
-    if exists("g:usr_pp") && type(g:usr_pp) ==  type({})
-        let s:all_pps = deepcopy(g:usr_pp)
-        for type in keys(s:def_pp)
-            if !has_key(s:all_pps, type)
-                let s:all_pps[type] = deepcopy(s:def_pp[type])
+fun! s:MakePPs()
+    let s:allPPs = {}
+    if exists("g:usrPP") && type(g:usrPP) ==  type({})
+        let s:allPPs = deepcopy(g:usrPP)
+        for type in keys(s:defaultPP)
+            if !has_key(s:allPPs, type)
+                let s:allPPs[type] = deepcopy(s:defaultPP[type])
             else
-                call s:extend_type(s:all_pps[type], s:def_pp[type])
+                call s:ExpendType(s:allPPs[type], s:defaultPP[type])
             endif
         endfor
     else
-        let s:all_pps = deepcopy(s:def_pp)
+        let s:allPPs = deepcopy(s:defaultPP)
     endif
 
     exec "silent! aunmenu &Popup.Type"
-    for type in keys(s:all_pps)
+    for type in keys(s:allPPs)
         silent exec 'amenu <silent> &Popup.Type.'.escape(type, '.').
-                    \ " :call \<SID>set_pp_type('".type."')\<CR>"
+                    \ " :call \<SID>SetPPTypes('".type."')\<CR>"
     endfor
 endfun
 
-"set_pp_type{{{1
-fun! s:set_pp_type(...)
+"SetPPTypes{{{1
+fun! s:SetPPTypes(...)
     let type = a:0 > 0 ? a:1 : &ft
-    let b:pp_new = []
-    if has_key(s:all_pps, type)
-        let b:pp_new = deepcopy(s:all_pps[type])
+    let b:PPType = []
+    if has_key(s:allPPs, type)
+        let b:PPType = deepcopy(s:allPPs[type])
     endif
-    if type != '*' && has_key(s:all_pps, "*")
-        call s:extend_type(b:pp_new, s:all_pps['*'])
+    if type != '*' && has_key(s:allPPs, "*")
+        call s:ExpendType(b:PPType, s:allPPs['*'])
     endif
 endfun
-fun! g:pp_types(A,L,P)
-    return keys(s:all_pps)
+fun! g:PPTypes(A,L,P)
+    return join(keys(s:allPPs), "\n")
 endfun
 
 "def Popup: {{{1
-let s:def_pp = {}
-let s:def_pp["*"] = [
+let s:defaultPP = {}
+let s:defaultPP["*"] = [
             \ {'cmd'     : "\<c-x>\<c-f>",
             \  'pattern' : ['/\f\{1,}'],
             \ },
@@ -300,12 +310,12 @@ let s:def_pp["*"] = [
             \  'pattern' : ['\k\@<!\k\{3,20}'],
             \ },
             \]
-let s:def_pp["c"] = [
+let s:defaultPP["c"] = [
             \ {'cmd'     : "\<c-x>\<c-o>",
             \  'pattern' : ['\k\.','\k->'],
             \ },
             \]
-let s:def_pp["c.gtk"] = [
+let s:defaultPP["c.gtk"] = [
             \ {'cmd'     : "\<c-x>\<c-o>",
             \  'pattern' : ['\k\.\k{0,20}','\k->\k{0,20}',
             \               'gtk_\k\{2,20}','GTK_\k\{1,20}','Gtk\k\{1,20}',
@@ -313,18 +323,18 @@ let s:def_pp["c.gtk"] = [
             \               'g_\k\{2,20}', 'G_\k\{1,20}'],
             \ },
             \]
-let s:def_pp["tex"] = [
+let s:defaultPP["tex"] = [
             \ {'cmd'     : "\<c-n>",
             \  'pattern' : ['\\\k\{3,20}','\([\|{\)\k\{3,20}'],
             \ },
             \]
-let s:def_pp["html"] = [
+let s:defaultPP["html"] = [
             \ {'cmd'     : "\<c-x>\<c-o>",
             \  'pattern' : ['&','<','</',
             \               '<.*\s\+\k\{3,20}','<.*\k\+\s*="\k\{3,20}'],
             \ },
             \]
-let s:def_pp["css"] = [
+let s:defaultPP["css"] = [
             \ {'cmd'     : "\<c-n>",
             \  'pattern' : ['\k\@<!\k\{3,20}'],
             \  'exclude' : ['^\s.*'],
@@ -333,9 +343,12 @@ let s:def_pp["css"] = [
             \  'pattern' : ['^\s.*\(\k\|-\)\@<!\(\k\|-\)\{2,20}'],
             \ },
             \]
-let s:def_pp["javascript"] = [
+let s:defaultPP["javascript"] = [
             \ {'cmd'     : "\<c-x>\<c-o>",
             \  'pattern' : ['\k\.\k\{0,20}'],
             \ },
             \]
+
+let s:allPPs  = {}
+call s:MakePPs()
 " vim: set ft=vim ff=unix fdm=marker :
